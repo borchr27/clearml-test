@@ -7,9 +7,9 @@ clearml:
 
 data:
   # The local file on your PC to ship to the remote execution machine
-  file_path: "mnist_cnn.pt"
+  file_path: "mnist_dataset.pt"
   # How the file is used: 'data_file' (TensorDataset) or 'checkpoint' (starting weights)
-  file_usage: "checkpoint"
+  file_usage: "data_file"
   # Temporary directory on the remote machine
   temp_local_dir: "/tmp/mnist_data"
   # Automatically remove temporary data when training completes (or crashes)

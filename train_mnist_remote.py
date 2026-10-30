@@ -123,8 +123,9 @@ def acquire_dataset(cfg_data, transform, local_artifact_file=None):
     temp_dir = Path(cfg_data.get("temp_local_dir", "/tmp/mnist_data")).expanduser().resolve()
     temp_dir.mkdir(parents=True, exist_ok=True)
     source_type = cfg_data.get("source_type", "file_artifact")
+    file_usage = cfg_data.get("file_usage", "data_file")
 
-    if local_artifact_file and (source_type == "file_artifact" or cfg_data.get("file_path")):
+    if local_artifact_file and file_usage == "data_file":
         try:
             return load_dataset_from_pt(local_artifact_file, transform), temp_dir
         except Exception as e:
