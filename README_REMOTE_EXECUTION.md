@@ -18,23 +18,55 @@ This setup allows you to dispatch training jobs from your local PC to a remote G
 
 ---
 
-## 2. Using Local Files (like `mnist_cnn.pt`)
+## 2. Using Datasets and Local Files
 
-To use your local file `mnist_cnn.pt` on the remote machine:
+You can provide data to the remote training job in three ways:
 
-1. In `config.yaml`, configure the `data` section:
+### Option A: ClearML Dataset Registry (Multi-file / Large Datasets)
+Upload a local dataset folder once to ClearML, and all remote workers will pull and cache it automatically:
+
+1. Upload the directory using `upload_dataset.py`:
+   ```bash
+   pixi run python upload_dataset.py --path ./data/mnist_raw --name "mnist-dataset" --project "datasets"
+   ```
+2. In `config.yaml`:
    ```yaml
    data:
-     file_path: "mnist_cnn.pt"         # Local file path on your PC
-     file_usage: "checkpoint"         # 'data_file' (tensor dataset) or 'checkpoint' (starting weights)
-     cleanup_after_run: true          # Deletes the file on the remote machine when run completes
-     source_type: "file_artifact"
+     source_type: "clearml_dataset"
+     dataset_project: "datasets"
+     dataset_name: "mnist-dataset"
+     file_path: ""                 # No local file needed
+     file_usage: "none"
+     cleanup_after_run: false      # Let ClearML manage local caching on the GPU machine
    ```
 
-2. When you run `train_mnist_remote.py` on your local PC:
-   - ClearML uploads `mnist_cnn.pt` as a task input artifact (`input_pt_file`).
-   - If `execute_remotely: true`, the task is enqueued to `gpu_queue` and exits locally.
-   - The remote agent on `revel-pc-02` downloads `mnist_cnn.pt` into a temporary location, loads it into PyTorch, trains on the GPU, and automatically deletes the temporary file in the `finally` block.
+### Option B: Local Tensor Dataset File (`.pt` Artifact)
+Ship a local `.pt` file containing PyTorch tensors (e.g. `mnist_dataset.pt` with `{"data": ..., "targets": ...}` or `(images, labels)`):
+
+1. In `config.yaml`:
+   ```yaml
+   data:
+     file_path: "mnist_dataset.pt"     # Local file path on your PC
+     file_usage: "data_file"          # 'data_file' parses as TensorDataset
+     cleanup_after_run: true          # Deletes the temp file on remote runner after run
+     source_type: "file_artifact"
+   ```
+2. When you run `train_mnist_remote.py`:
+   - Your local PC uploads `mnist_dataset.pt` as an artifact to the ClearML Task.
+   - The remote agent downloads the artifact into `/tmp`, loads it into a `TensorDataset`, and trains on the GPU.
+
+### Option C: Pre-trained Model Checkpoint Weights (`.pt` Artifact)
+If your `.pt` file contains a model `state_dict` (e.g. `mnist_cnn.pt` with `conv1.weight`, `conv1.bias`, etc.) rather than dataset images:
+
+1. In `config.yaml`:
+   ```yaml
+   data:
+     file_path: "mnist_cnn.pt"
+     file_usage: "checkpoint"         # 'checkpoint' loads initial model weights
+     cleanup_after_run: true
+     source_type: "builtin"           # Or 'clearml_dataset' for training data
+   ```
+2. The remote agent loads the weights into the neural network before training starts, fine-tuning your existing model.
 
 ---
 
@@ -80,8 +112,8 @@ clearml:
   upload_artifacts: true         # Uploads final trained weights to ClearML
 
 data:
-  file_path: "mnist_cnn.pt"      # Local file to ship to remote runner
-  file_usage: "checkpoint"       # 'data_file' or 'checkpoint'
+  file_path: "mnist_dataset.pt"  # Local file to ship to remote runner
+  file_usage: "data_file"        # 'data_file' or 'checkpoint'
   temp_local_dir: "/tmp/mnist_data"
   cleanup_after_run: true        # Deletes temp data after training finishes
   source_type: "file_artifact"   # 'file_artifact', 'builtin', 'clearml_dataset', or 'local_path'
