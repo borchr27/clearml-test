@@ -1,0 +1,11 @@
+# Ignore file of docker/Dockerfile (BuildKit reads <Dockerfile>.dockerignore next to the Dockerfile
+# instead of .dockerignore in the build context). Paths are relative to the build context (the
+# repository root).
+# Allow-list: only what the image needs is sent to the build context.
+*
+!pixi.toml
+!pixi.lock
+!config.yaml
+!src/
+**/__pycache__/
+**/DECISIONS.md

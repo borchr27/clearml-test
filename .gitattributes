@@ -1,0 +1,23 @@
+# Normalize line endings: files are committed with LF and checked out with the OS line endings.
+* text=auto
+
+# Files that must keep LF on every OS.
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Lockfile: never merge by hand (regenerate with `pixi install`), collapsed in GitHub diffs.
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+
+# Binary data
+*.npy binary
+*.npz binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pt binary
+*.onnx binary

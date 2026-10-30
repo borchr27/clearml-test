@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pixi run:*)",
+      "Bash(pixi install:*)",
+      "Bash(pixi list:*)",
+      "Bash(pixi task list:*)"
+    ]
+  }
+}

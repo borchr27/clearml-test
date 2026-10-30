@@ -1,0 +1,29 @@
+# Tool configuration only (ruff, ty, pytest).
+# The project itself (dependencies, tasks, environments) is defined in pixi.toml.
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+    "RUF",  # ruff-specific
+]
+
+[tool.ty.environment]
+python-version = "3.14"
+root = ["src"]
+
+[tool.pytest]
+testpaths = ["tests"]
+# importlib mode: tests/unit mirrors src, so test file basenames may repeat across folders
+addopts = ["--import-mode=importlib"]

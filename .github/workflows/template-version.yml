@@ -1,0 +1,67 @@
+# Versioning of the perception-template itself; skipped in projects created from the template
+# (delete this file there). Every PR must bump `template_version` in .template.yaml (semver), and
+# every merge to main is tagged v<template_version> with a GitHub release, so a version that a
+# project records in its .template.yaml points to exactly one template commit.
+name: Template version
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check-bump:
+    name: Check template version bump
+    if: github.repository == 'REVEL-Robotics/perception-template' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare with the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          read_version() { sed -n 's/^template_version: *\([^ #]*\).*/\1/p'; }
+
+          new=$(read_version < .template.yaml)
+          if ! [[ "$new" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=.template.yaml::template_version '$new' is not a MAJOR.MINOR.PATCH version"
+            exit 1
+          fi
+
+          git fetch --depth=1 origin "$BASE_REF"
+          old=$(git show "origin/$BASE_REF:.template.yaml" 2>/dev/null | read_version || true)
+          if [[ -n "$old" ]]; then
+            highest=$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)
+            if [[ "$new" == "$old" || "$highest" != "$new" ]]; then
+              echo "::error file=.template.yaml::bump template_version above $old (now $new), see README > Template versioning"
+              exit 1
+            fi
+          fi
+
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/v$new")" ]]; then
+            echo "::error file=.template.yaml::tag v$new already exists, bump template_version further"
+            exit 1
+          fi
+          echo "template_version ${old:-<none>} -> $new"
+
+  release:
+    name: Tag and release template version
+    if: github.repository == 'REVEL-Robotics/perception-template' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^template_version: *\([^ #]*\).*/\1/p' .template.yaml)
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/v$version")" ]]; then
+            echo "::error file=.template.yaml::tag v$version already exists; was template_version bumped?"
+            exit 1
+          fi
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --generate-notes

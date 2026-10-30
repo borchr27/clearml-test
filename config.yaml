@@ -1,0 +1,28 @@
+clearml:
+  project_name: "clearml-test"
+  task_name: "mnist-training"
+  execute_remotely: true         # Set to true when dispatching to the remote GPU queue
+  queue_name: "gpu_queue"          # ClearML queue that revel-pc-02 daemon listens to
+  upload_artifacts: true          # Save and upload final model weights (.pt) to ClearML
+
+data:
+  # The local file on your PC to ship to the remote execution machine
+  file_path: "mnist_cnn.pt"
+  # How the file is used: 'data_file' (TensorDataset) or 'checkpoint' (starting weights)
+  file_usage: "checkpoint"
+  # Temporary directory on the remote machine
+  temp_local_dir: "/tmp/mnist_data"
+  # Automatically remove temporary data when training completes (or crashes)
+  cleanup_after_run: true
+  # Fallback source if file_path is omitted: 'builtin', 'clearml_dataset', or 'local_path'
+  source_type: "file_artifact"
+  dataset_project: "datasets"
+  dataset_name: "mnist"
+
+training:
+  epochs: 3
+  batch_size: 128
+  test_batch_size: 1000
+  learning_rate: 0.001
+  hidden_dim: 64
+  seed: 42

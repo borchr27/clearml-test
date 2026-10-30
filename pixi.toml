@@ -1,0 +1,56 @@
+[workspace]
+name = "perception-template"
+version = "0.1.0"
+description = "Repository template for the Perception team."
+channels = ["conda-forge"]
+# Pixi 0.82+ reads the platform tables below (CI and docker/Dockerfile pin the same version).
+requires-pixi = ">=0.82.0"
+# System dependencies: the minimum kernel, C library, OS and driver versions each platform needs
+# from the host (conda virtual packages). The solver only picks packages that run on them; they are
+# recorded in pixi.lock. Raise them when a dependency needs it, e.g. `cuda = "12"` for GPU packages
+# (a separate named platform used by a `gpu` feature if only some environments need CUDA), and log
+# the change in docs/decisions/tooling.md. Libraries come from conda-forge in [dependencies], not
+# from apt or brew.
+platforms = [
+    { name = "linux-x64", platform = "linux-64", linux = "4.18", glibc = "2.28" },
+    { name = "linux-arm64", platform = "linux-aarch64", linux = "4.18", glibc = "2.28" },
+    { name = "macos-arm64", platform = "osx-arm64", macos = "13.0" },
+    { name = "windows-x64", platform = "win-64" },
+]
+
+[dependencies]
+python = "3.14.*"
+numpy = ">=2.0"
+pyyaml = ">=6.0"
+clearml = ">=2.1.12,<3"
+pytorch = ">=2.14.1,<3"
+torchvision = ">=0.29.1,<0.30"
+matplotlib = ">=3.11.2,<4"
+
+[activation.env]
+# makes the package in src/ importable (python -m perception_template, tests, Docker)
+PYTHONPATH = "$PIXI_PROJECT_ROOT/src"
+
+[tasks]
+start = { cmd = "python -m perception_template", description = "Run the app (reads config.yaml)" }
+
+# ------------------------------------------------------------------ dev tools
+[feature.dev.dependencies]
+pytest = ">=9.0"  # 9.0+ reads the native [tool.pytest] table
+ruff = "*"
+ty = "*"
+
+[feature.dev.tasks]
+test = { cmd = "pytest", description = "Run all tests" }
+test-unit = { cmd = "pytest tests/unit", description = "Run unit tests" }
+test-integration = { cmd = "pytest tests/integration", description = "Run integration tests" }
+lint = { cmd = "ruff check", description = "Lint with ruff" }
+format = { cmd = "ruff format && ruff check --fix", description = "Format and auto-fix with ruff" }
+format-check = { cmd = "ruff format --check", description = "Check formatting with ruff" }
+typecheck = { cmd = "ty check", description = "Typecheck with ty" }
+check = { depends-on = ["lint", "format-check", "typecheck", "test"], description = "Run everything CI runs (except the Docker build)" }
+
+# ------------------------------------------------------------------ environments
+[environments]
+default = { features = ["dev"], solve-group = "default" }
+prod = { features = [], solve-group = "default" }  # runtime only, used by docker/Dockerfile

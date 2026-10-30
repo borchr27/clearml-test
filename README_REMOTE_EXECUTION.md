@@ -1,0 +1,120 @@
+# ClearML Remote Execution & Training Guide
+
+This setup allows you to dispatch training jobs from your local PC to a remote GPU machine (`revel-pc-02`) running a `clearml-agent` daemon.
+
+- **No manual SSH execution scripts needed per run**: ClearML handles code packaging and execution.
+- **Local File Shipping**: Easily ship local `.pt` files (such as `mnist_cnn.pt`) to the remote GPU machine without needing Git commits.
+- **Config-driven**: All settings are defined in `config.yaml`.
+- **Dynamic GPU allocation**: Automatically selects the GPU with the most free VRAM (falls back to CPU if needed).
+- **Data clean-up**: Temporary dataset copies and downloaded artifacts are automatically wiped from the GPU machine when training finishes.
+
+---
+
+## 1. Files Overview
+
+- **`config.yaml`**: Main configuration file containing ClearML settings, dataset/file options, and hyperparameters.
+- **`train_mnist_remote.py`**: Training script supporting local or remote dispatch, local file artifact shipping, freest-GPU selection, metric reporting, and automatic cleanup.
+- **`upload_dataset.py`**: Helper script to register and upload a local dataset directory to ClearML once (if using large multi-file datasets).
+
+---
+
+## 2. Using Local Files (like `mnist_cnn.pt`)
+
+To use your local file `mnist_cnn.pt` on the remote machine:
+
+1. In `config.yaml`, configure the `data` section:
+   ```yaml
+   data:
+     file_path: "mnist_cnn.pt"         # Local file path on your PC
+     file_usage: "checkpoint"         # 'data_file' (tensor dataset) or 'checkpoint' (starting weights)
+     cleanup_after_run: true          # Deletes the file on the remote machine when run completes
+     source_type: "file_artifact"
+   ```
+
+2. When you run `train_mnist_remote.py` on your local PC:
+   - ClearML uploads `mnist_cnn.pt` as a task input artifact (`input_pt_file`).
+   - If `execute_remotely: true`, the task is enqueued to `gpu_queue` and exits locally.
+   - The remote agent on `revel-pc-02` downloads `mnist_cnn.pt` into a temporary location, loads it into PyTorch, trains on the GPU, and automatically deletes the temporary file in the `finally` block.
+
+---
+
+## 3. One-Time Setup: ClearML Daemon on the GPU Machine (`revel-pc-02`)
+
+Log into the GPU machine once to initialize ClearML and start the background agent:
+
+```bash
+ssh mitchell@revel-pc-02
+```
+
+### Step 3.1: Initialize ClearML Credentials (if not done already)
+```bash
+pixi run clearml-init
+```
+Follow the prompts and paste your API keys from the ClearML Web UI (Settings -> Workspace -> Create new credentials).
+
+### Step 3.2: Start the Agent Daemon
+Run the agent in a persistent `tmux` session so it stays alive after disconnecting:
+
+```bash
+# Start a tmux session
+tmux new -s clearml_daemon
+
+# Launch the daemon listening on the queue specified in config.yaml (e.g. gpu_queue)
+# Use --create-queue to automatically create the queue if it does not exist yet:
+pixi run clearml-agent daemon --queue gpu_queue --create-queue
+```
+
+*Detach from the tmux session by pressing `Ctrl + B`, then release and press `D`.*
+The agent is now waiting to receive and execute jobs.
+
+---
+
+## 4. Configuration (`config.yaml`)
+
+```yaml
+clearml:
+  project_name: "clearml-test"
+  task_name: "mnist-training"
+  execute_remotely: false        # Set to true to dispatch to revel-pc-02; false for local run
+  queue_name: "gpu_queue"         # Queue listened to by the agent daemon
+  upload_artifacts: true         # Uploads final trained weights to ClearML
+
+data:
+  file_path: "mnist_cnn.pt"      # Local file to ship to remote runner
+  file_usage: "checkpoint"       # 'data_file' or 'checkpoint'
+  temp_local_dir: "/tmp/mnist_data"
+  cleanup_after_run: true        # Deletes temp data after training finishes
+  source_type: "file_artifact"   # 'file_artifact', 'builtin', 'clearml_dataset', or 'local_path'
+
+training:
+  epochs: 3
+  batch_size: 128
+  test_batch_size: 1000
+  learning_rate: 0.001
+  hidden_dim: 64
+  seed: 42
+```
+
+---
+
+## 5. How to Run Training
+
+### Mode A: Test Run Locally (on your PC)
+Ensure `execute_remotely: false` in `config.yaml`, then run:
+```bash
+pixi run python train_mnist_remote.py
+```
+
+### Mode B: Dispatch to Remote GPU Machine (`revel-pc-02`)
+1. Set `execute_remotely: true` in `config.yaml`.
+2. Run from your local PC:
+   ```bash
+   pixi run python train_mnist_remote.py
+   ```
+3. The script uploads `mnist_cnn.pt` to ClearML, enqueues the task to `gpu_queue`, and exits on your PC.
+4. The daemon on `revel-pc-02`:
+   - Downloads `mnist_cnn.pt` from ClearML.
+   - Selects the freest GPU.
+   - Trains the model.
+   - Uploads metrics, loss curves, and final model weights.
+   - Cleans up and deletes the temporary files.

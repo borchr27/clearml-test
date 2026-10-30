@@ -1,0 +1,6 @@
+# The perception-template version this repository was created from. Do not edit it in projects:
+# it records which template structure the code started from.
+# Every version is the git tag v<template_version> in the template repository, i.e. one commit:
+# https://github.com/REVEL-Robotics/perception-template/releases
+template_repository: REVEL-Robotics/perception-template
+template_version: 1.0.0
