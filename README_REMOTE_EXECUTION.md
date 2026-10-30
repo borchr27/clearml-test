@@ -109,6 +109,7 @@ clearml:
   task_name: "mnist-training"
   execute_remotely: false        # Set to true to dispatch to revel-pc-02; false for local run
   queue_name: "gpu_queue"         # Queue listened to by the agent daemon
+  remote_host: "mitchell@revel-pc-02" # SSH host for remote daemon management
   upload_artifacts: true         # Uploads final trained weights to ClearML
 
 data:
@@ -129,7 +130,40 @@ training:
 
 ---
 
-## 5. How to Run Training
+## 5. Master Management Script (`run.sh`)
+
+You can manage all operations (training, HPO sweeps, remote daemons, and datasets) using the all-in-one `./run.sh` script:
+
+```bash
+# 1. Dispatch a training run to the remote GPU (default: remote)
+./run.sh train
+
+# Override options on the fly:
+./run.sh train --remote --epochs 5 --file mnist_dataset.pt --usage data_file
+./run.sh train --local
+
+# 2. Run Hyperparameter Optimization (HPO) Sweep
+./run.sh hpo --jobs 10 --concurrency 2
+
+# 3. Manage the remote agent on revel-pc-02 over SSH
+./run.sh agent status          # Check if daemon is active
+./run.sh agent logs            # Tail live logs from ~/.clearml/agent.log
+./run.sh agent attach          # Attach directly to the live interactive tmux screen
+./run.sh agent start           # Launch daemon in persistent tmux session (tees to log)
+./run.sh agent stop            # Stop remote daemon
+
+# 4. Upload a local dataset directory to ClearML Dataset registry
+./run.sh upload-dataset --path ./data/mnist_raw --name "mnist-dataset"
+
+# 5. Open ClearML Web Dashboard
+./run.sh ui
+```
+
+---
+
+## 6. Manual Execution (Pixi Commands)
+
+If you prefer calling python scripts directly without the wrapper script:
 
 ### Mode A: Test Run Locally (on your PC)
 Ensure `execute_remotely: false` in `config.yaml`, then run:
@@ -143,10 +177,8 @@ pixi run python train_mnist_remote.py
    ```bash
    pixi run python train_mnist_remote.py
    ```
-3. The script uploads `mnist_cnn.pt` to ClearML, enqueues the task to `gpu_queue`, and exits on your PC.
-4. The daemon on `revel-pc-02`:
-   - Downloads `mnist_cnn.pt` from ClearML.
-   - Selects the freest GPU.
-   - Trains the model.
-   - Uploads metrics, loss curves, and final model weights.
-   - Cleans up and deletes the temporary files.
+
+### Mode C: Run HPO Optimization Sweep
+```bash
+pixi run python hpo_controller.py --jobs 10 --concurrency 2
+```
