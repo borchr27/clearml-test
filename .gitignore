@@ -27,3 +27,5 @@ Thumbs.db
 .env
 .claude/settings.local.json
 *.pt
+*.gz
+temp/ pixi run clearml-agent daemon --queue gpu_queue --create-queue --foreground
