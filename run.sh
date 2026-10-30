@@ -248,14 +248,18 @@ cmd_agent() {
             print_header "Checking ClearML Agent on $REMOTE_HOST..."
             ssh "$REMOTE_HOST" '
                 if tmux has-session -t clearml_daemon 2>/dev/null; then
-                    echo "✔ clearml_daemon tmux session is RUNNING."
-                else
-                    RUNNING_PIDS=$(ps -eo pid,cmd | grep -E "[c]learml-agent daemon|[c]learml_agent" | awk "{print \$1}")
-                    if [[ -n "$RUNNING_PIDS" ]]; then
-                        echo "✔ clearml-agent process is RUNNING outside tmux (PIDs: $RUNNING_PIDS)."
-                    else
-                        echo "✖ clearml-agent is NOT running on revel-pc-02."
-                    fi
+                    echo "✔ clearml_daemon tmux session is ACTIVE."
+                fi
+
+                # Find actual clearml-agent daemon processes (ignoring SSH / current subshell)
+                DAEMON_INFO=$(ps -eo pid,args | grep -E "[c]learml-agent daemon" | grep -v -E "grep|ssh" || true)
+                if [[ -n "$DAEMON_INFO" ]]; then
+                    echo "✔ Active Daemon Process(es):"
+                    echo "$DAEMON_INFO" | while read -r pid cmd; do
+                        echo "  • PID $pid: $cmd"
+                    done
+                elif ! tmux has-session -t clearml_daemon 2>/dev/null; then
+                    echo "✖ clearml-agent daemon is NOT running on revel-pc-02."
                 fi
             '
             ;;
@@ -327,9 +331,9 @@ cmd_agent() {
             print_header "Stopping ClearML Agent on $REMOTE_HOST..."
             ssh "$REMOTE_HOST" '
                 tmux kill-session -t clearml_daemon 2>/dev/null || true
-                pkill -f "clearml-agent daemon" 2>/dev/null || true
-                pkill -f "clearml_agent" 2>/dev/null || true
-                echo "✔ clearml-agent stopped."
+                pkill -f "clearml-agent.*daemon" 2>/dev/null || true
+                pkill -f "clearml_agent.*daemon" 2>/dev/null || true
+                echo "✔ clearml-agent daemon stopped."
             '
             ;;
         *)
