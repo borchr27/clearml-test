@@ -294,16 +294,34 @@ cmd_agent() {
             ;;
         start)
             print_header "Starting ClearML Agent on $REMOTE_HOST in tmux..."
-            ssh "$REMOTE_HOST" "
+            if ! ssh -t "$REMOTE_HOST" bash -l -c "'
+                set -e
+                QUEUE=\"$DEFAULT_QUEUE\"
+                
+                # Locate pixi on the remote host
+                if command -v pixi &>/dev/null; then
+                    REMOTE_PIXI=\"pixi\"
+                elif [[ -x \"\$HOME/.pixi/bin/pixi\" ]]; then
+                    REMOTE_PIXI=\"\$HOME/.pixi/bin/pixi\"
+                else
+                    echo \"✖ Error: pixi executable not found on remote machine ($REMOTE_HOST).\"
+                    exit 1
+                fi
+
                 mkdir -p ~/.clearml
                 if tmux has-session -t clearml_daemon 2>/dev/null; then
-                    echo 'Session clearml_daemon already exists. Restarting...'
+                    echo \"Session clearml_daemon already exists. Restarting...\"
                     tmux kill-session -t clearml_daemon
                 fi
-                tmux new-session -d -s clearml_daemon 'cd ~/projects/clearml-test && pixi run clearml-agent daemon --queue $DEFAULT_QUEUE --create-queue 2>&1 | tee -a ~/.clearml/agent.log'
-                echo '✔ Daemon started in tmux session \"clearml_daemon\" listening on $DEFAULT_QUEUE'
-                echo '✔ Output tee-ed to ~/.clearml/agent.log'
-            "
+
+                # Start daemon strictly on remote host
+                tmux new-session -d -s clearml_daemon \"cd ~/projects/clearml-test && \$REMOTE_PIXI run clearml-agent daemon --queue \$QUEUE --create-queue 2>&1 | tee -a ~/.clearml/agent.log\"
+                echo \"✔ Daemon successfully started in remote tmux session \\\"clearml_daemon\\\" on \$QUEUE\"
+                echo \"✔ Remote logs writing to ~/.clearml/agent.log\"
+            '"; then
+                print_error "SSH command to start agent on $REMOTE_HOST failed. Nothing was run locally."
+                exit 1
+            fi
             ;;
         stop)
             print_header "Stopping ClearML Agent on $REMOTE_HOST..."
