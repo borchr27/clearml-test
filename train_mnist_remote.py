@@ -1,5 +1,6 @@
 import os
 import shutil
+import argparse
 import yaml
 from pathlib import Path
 
@@ -245,6 +246,18 @@ def log_sample_predictions(model, device, test_loader, logger, num_samples=10):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="ClearML MNIST Training")
+    parser.add_argument("--remote", action="store_true", default=None, help="Force remote execution")
+    parser.add_argument("--local", action="store_true", default=None, help="Force local execution")
+    parser.add_argument("--queue", type=str, default=None, help="Queue name for remote execution")
+    parser.add_argument("--file", type=str, default=None, help="Input file path (e.g. mnist_dataset.pt)")
+    parser.add_argument("--usage", type=str, choices=["data_file", "checkpoint"], default=None, help="File usage")
+    parser.add_argument("--epochs", type=int, default=None, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=None, help="Training batch size")
+    parser.add_argument("--lr", "--learning-rate", type=float, default=None, dest="lr", help="Learning rate")
+    parser.add_argument("--hidden-dim", type=int, default=None, help="Hidden dimension size")
+    cli_args = parser.parse_args()
+
     # 1. Load config.yaml if present locally (on remote agent without git repo, ClearML restores it)
     config_path = Path("config.yaml")
     cfg = {}
@@ -252,9 +265,30 @@ def main():
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f) or {}
 
-    cml_cfg = cfg.get("clearml", {})
-    data_cfg = cfg.get("data", {})
-    train_cfg = cfg.get("training", {})
+    cml_cfg = cfg.setdefault("clearml", {})
+    data_cfg = cfg.setdefault("data", {})
+    train_cfg = cfg.setdefault("training", {})
+
+    # Apply in-memory CLI overrides (does NOT modify config.yaml on disk)
+    if cli_args.remote:
+        cml_cfg["execute_remotely"] = True
+    elif cli_args.local:
+        cml_cfg["execute_remotely"] = False
+
+    if cli_args.queue is not None:
+        cml_cfg["queue_name"] = cli_args.queue
+    if cli_args.file is not None:
+        data_cfg["file_path"] = cli_args.file
+    if cli_args.usage is not None:
+        data_cfg["file_usage"] = cli_args.usage
+    if cli_args.epochs is not None:
+        train_cfg["epochs"] = cli_args.epochs
+    if cli_args.batch_size is not None:
+        train_cfg["batch_size"] = cli_args.batch_size
+    if cli_args.lr is not None:
+        train_cfg["learning_rate"] = cli_args.lr
+    if cli_args.hidden_dim is not None:
+        train_cfg["hidden_dim"] = cli_args.hidden_dim
 
     # 2. ClearML initialization
     task = Task.init(

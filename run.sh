@@ -101,41 +101,6 @@ Examples:
 EOF
 }
 
-# Helper to modify config.yaml keys safely using python
-set_config_value() {
-    local key_path="$1"
-    local value="$2"
-    "$PIXI_CMD" run python -c "
-import yaml
-
-with open('$CONFIG_FILE', 'r') as f:
-    cfg = yaml.safe_load(f) or {}
-
-keys = '$key_path'.split('.')
-d = cfg
-for k in keys[:-1]:
-    if k not in d or not isinstance(d[k], dict):
-        d[k] = {}
-    d = d[k]
-
-# Handle types
-val = '$value'
-if val.lower() == 'true':
-    val = True
-elif val.lower() == 'false':
-    val = False
-elif val.isdigit():
-    val = int(val)
-elif val.replace('.', '', 1).isdigit() and '.' in val:
-    val = float(val)
-
-d[keys[-1]] = val
-
-with open('$CONFIG_FILE', 'w') as f:
-    yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
-"
-}
-
 # Ensure git status is clean or warned before remote dispatch
 check_git_remote() {
     if git rev-parse --is-inside-work-tree &>/dev/null; then
@@ -152,61 +117,34 @@ check_git_remote() {
 }
 
 cmd_train() {
-    local execute_remotely=true
-    local file_path=""
-    local file_usage=""
-    local epochs=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --remote)
-                execute_remotely=true
-                shift
-                ;;
-            --local)
-                execute_remotely=false
-                shift
-                ;;
-            --file)
-                file_path="$2"
-                shift 2
-                ;;
-            --usage)
-                file_usage="$2"
-                shift 2
-                ;;
-            --epochs)
-                epochs="$2"
-                shift 2
-                ;;
-            *)
-                print_error "Unknown train option: $1"
-                usage
-                exit 1
-                ;;
-        esac
+    local is_local=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--local" ]]; then
+            is_local=true
+            break
+        fi
     done
 
-    # Update config.yaml values
-    set_config_value "clearml.execute_remotely" "$execute_remotely"
-    if [[ -n "$file_path" ]]; then
-        set_config_value "data.file_path" "$file_path"
-    fi
-    if [[ -n "$file_usage" ]]; then
-        set_config_value "data.file_usage" "$file_usage"
-    fi
-    if [[ -n "$epochs" ]]; then
-        set_config_value "training.epochs" "$epochs"
-    fi
-
-    if [[ "$execute_remotely" == true ]]; then
-        print_header "Dispatching single training run to remote queue ($DEFAULT_QUEUE)..."
+    # Default to --remote if neither --remote nor --local was explicitly given
+    local extra_args=()
+    if [[ "$is_local" == false ]]; then
+        local has_remote=false
+        for arg in "$@"; do
+            if [[ "$arg" == "--remote" ]]; then
+                has_remote=true
+                break
+            fi
+        done
+        if [[ "$has_remote" == false ]]; then
+            extra_args+=("--remote")
+        fi
+        print_header "Dispatching training run to remote queue ($DEFAULT_QUEUE)..."
         check_git_remote
     else
         print_header "Running training locally..."
     fi
 
-    "$PIXI_CMD" run python train_mnist_remote.py
+    "$PIXI_CMD" run python train_mnist_remote.py "${extra_args[@]}" "$@"
 }
 
 cmd_hpo() {
