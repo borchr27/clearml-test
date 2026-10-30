@@ -3,6 +3,7 @@ clearml:
   task_name: "mnist-training"
   execute_remotely: true         # Set to true when dispatching to the remote GPU queue
   queue_name: "gpu_queue"          # ClearML queue that revel-pc-02 daemon listens to
+  remote_host: "mitchell@revel-pc-02" # SSH host for remote daemon management
   upload_artifacts: true          # Save and upload final model weights (.pt) to ClearML
 
 data:
