@@ -78,8 +78,10 @@ Commands:
 
   agent             Manage ClearML worker daemon on revel-pc-02
     status          Check if clearml-agent daemon is active
-    logs            Tail live logs from the agent on revel-pc-02
-    start           Start daemon in tmux on revel-pc-02
+    logs            Tail live logs from ~/.clearml/agent.log or dump tmux buffer
+    logs --attach   Attach directly to the live interactive tmux session
+    attach          Attach directly to the live interactive tmux session
+    start           Start daemon in tmux on revel-pc-02 (tees to agent.log)
     stop            Stop daemon processes on revel-pc-02
 
   upload-dataset    Register and upload a local dataset folder
@@ -255,26 +257,49 @@ cmd_agent() {
             '
             ;;
         logs)
-            print_header "Streaming ClearML Agent logs from $REMOTE_HOST (Ctrl+C to exit)..."
-            ssh -t "$REMOTE_HOST" '
-                LATEST_LOG=$(ls -t /tmp/.clearml_agent_daemon_out*.txt 2>/dev/null | head -n 1)
-                if [[ -n "$LATEST_LOG" ]]; then
-                    echo "Following log file: $LATEST_LOG"
-                    tail -n 50 -f "$LATEST_LOG"
-                else
-                    echo "No daemon log files found in /tmp."
-                fi
-            '
+            local mode="${2:-}"
+            if [[ "$mode" == "--attach" || "$mode" == "-a" ]]; then
+                print_header "Attaching to clearml_daemon tmux on $REMOTE_HOST (Detach with Ctrl+B then D)..."
+                ssh -t "$REMOTE_HOST" "tmux attach-session -t clearml_daemon"
+            else
+                print_header "Streaming ClearML Agent logs from $REMOTE_HOST (Ctrl+C to exit)..."
+                ssh -t "$REMOTE_HOST" '
+                    LOG_FILE="$HOME/.clearml/agent.log"
+                    if [[ -f "$LOG_FILE" ]]; then
+                        echo "Tailing log file: $LOG_FILE"
+                        tail -n 50 -f "$LOG_FILE"
+                    elif tmux has-session -t clearml_daemon 2>/dev/null; then
+                        echo "Note: ~/.clearml/agent.log not found yet. Dumping live tmux screen..."
+                        tmux capture-pane -pt clearml_daemon -S -50
+                        echo ""
+                        echo "(Tip: Run \"./run.sh agent logs --attach\" to attach directly to the live tmux session)"
+                    else
+                        LATEST_LOG=$(ls -t /tmp/.clearml_agent_daemon_out*.txt 2>/dev/null | head -n 1)
+                        if [[ -n "$LATEST_LOG" ]]; then
+                            echo "Following daemon log: $LATEST_LOG"
+                            tail -n 50 -f "$LATEST_LOG"
+                        else
+                            echo "No active agent logs found on revel-pc-02."
+                        fi
+                    fi
+                '
+            fi
+            ;;
+        attach)
+            print_header "Attaching to clearml_daemon tmux on $REMOTE_HOST (Detach with Ctrl+B then D)..."
+            ssh -t "$REMOTE_HOST" "tmux attach-session -t clearml_daemon"
             ;;
         start)
             print_header "Starting ClearML Agent on $REMOTE_HOST in tmux..."
             ssh "$REMOTE_HOST" "
+                mkdir -p ~/.clearml
                 if tmux has-session -t clearml_daemon 2>/dev/null; then
-                    echo 'Session clearml_daemon already exists. Killing old session...'
+                    echo 'Session clearml_daemon already exists. Restarting...'
                     tmux kill-session -t clearml_daemon
                 fi
-                tmux new-session -d -s clearml_daemon 'cd ~/projects/clearml-test && pixi run clearml-agent daemon --queue $DEFAULT_QUEUE --create-queue'
+                tmux new-session -d -s clearml_daemon 'cd ~/projects/clearml-test && pixi run clearml-agent daemon --queue $DEFAULT_QUEUE --create-queue 2>&1 | tee -a ~/.clearml/agent.log'
                 echo '✔ Daemon started in tmux session \"clearml_daemon\" listening on $DEFAULT_QUEUE'
+                echo '✔ Output tee-ed to ~/.clearml/agent.log'
             "
             ;;
         stop)
@@ -286,7 +311,7 @@ cmd_agent() {
             '
             ;;
         *)
-            print_error "Unknown agent action: $action. Use: status | logs | start | stop"
+            print_error "Unknown agent action: $action. Use: status | logs [--attach] | attach | start | stop"
             exit 1
             ;;
     esac

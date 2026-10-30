@@ -146,10 +146,11 @@ You can manage all operations (training, HPO sweeps, remote daemons, and dataset
 ./run.sh hpo --jobs 10 --concurrency 2
 
 # 3. Manage the remote agent on revel-pc-02 over SSH
-./run.sh agent status     # Check if daemon is active
-./run.sh agent logs       # Stream live daemon logs
-./run.sh agent start      # Launch daemon in persistent tmux session
-./run.sh agent stop       # Stop remote daemon
+./run.sh agent status          # Check if daemon is active
+./run.sh agent logs            # Tail live logs from ~/.clearml/agent.log
+./run.sh agent attach          # Attach directly to the live interactive tmux screen
+./run.sh agent start           # Launch daemon in persistent tmux session (tees to log)
+./run.sh agent stop            # Stop remote daemon
 
 # 4. Upload a local dataset directory to ClearML Dataset registry
 ./run.sh upload-dataset --path ./data/mnist_raw --name "mnist-dataset"
