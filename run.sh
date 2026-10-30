@@ -249,10 +249,13 @@ cmd_agent() {
             ssh "$REMOTE_HOST" '
                 if tmux has-session -t clearml_daemon 2>/dev/null; then
                     echo "✔ clearml_daemon tmux session is RUNNING."
-                elif pgrep -f clearml-agent > /dev/null; then
-                    echo "✔ clearml-agent process is RUNNING (outside tmux)."
                 else
-                    echo "✖ clearml-agent is NOT running on revel-pc-02."
+                    RUNNING_PIDS=$(ps -eo pid,cmd | grep -E "[c]learml-agent daemon|[c]learml_agent" | awk "{print \$1}")
+                    if [[ -n "$RUNNING_PIDS" ]]; then
+                        echo "✔ clearml-agent process is RUNNING outside tmux (PIDs: $RUNNING_PIDS)."
+                    else
+                        echo "✖ clearml-agent is NOT running on revel-pc-02."
+                    fi
                 fi
             '
             ;;
@@ -306,7 +309,8 @@ cmd_agent() {
             print_header "Stopping ClearML Agent on $REMOTE_HOST..."
             ssh "$REMOTE_HOST" '
                 tmux kill-session -t clearml_daemon 2>/dev/null || true
-                pkill -f clearml-agent || true
+                pkill -f "clearml-agent daemon" 2>/dev/null || true
+                pkill -f "clearml_agent" 2>/dev/null || true
                 echo "✔ clearml-agent stopped."
             '
             ;;
